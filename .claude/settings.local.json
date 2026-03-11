@@ -4,7 +4,8 @@
       "Bash(tree:*)",
       "Bash(npx expo install:*)",
       "Bash(npm install:*)",
-      "Bash(npx expo login)"
+      "Bash(npx expo login)",
+      "Bash(ls -la /d/Laura/LBU-SmartBottle-main/SmartBottleApp/app/\\\\\\(tabs\\\\\\))"
     ]
   }
 }

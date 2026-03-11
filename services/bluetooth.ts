@@ -22,7 +22,35 @@ import RNBluetoothClassic, {
   BluetoothDevice,
   BluetoothDeviceReadEvent,
 } from 'react-native-bluetooth-classic';
+import { PermissionsAndroid, Platform } from 'react-native';
 import { insertDrinkEvent, dateStrFromTimestamp } from './database';
+
+// ─── Runtime Permission Request (Android 12+) ────────────────────────────────
+
+export async function requestBluetoothPermissions(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
+
+  try {
+    // Android 12+ (API 31+) requires BLUETOOTH_CONNECT + BLUETOOTH_SCAN at runtime
+    const granted = await PermissionsAndroid.requestMultiple([
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+    ]);
+
+    const allGranted = Object.values(granted).every(
+      (result) => result === PermissionsAndroid.RESULTS.GRANTED
+    );
+
+    if (!allGranted) {
+      console.warn('[BT] Some Bluetooth permissions were denied:', granted);
+    }
+    return allGranted;
+  } catch (e) {
+    console.error('[BT] Permission request failed:', e);
+    return false;
+  }
+}
 
 export interface ParsedDrinkPacket {
   timestamp: number; // Unix epoch ms
@@ -137,17 +165,55 @@ let activeDevice: BluetoothDevice | null = null;
 let readSubscription: { remove: () => void } | null = null;
 let asciiBuffer = '';
 
-/** Returns list of paired Bluetooth devices */
+/** Returns list of paired (bonded) Bluetooth devices */
 export async function getPairedDevices(): Promise<BluetoothDevice[]> {
   try {
+    console.log('[BT] Step 1: requesting permissions…');
+    await requestBluetoothPermissions();
+
+    console.log('[BT] Step 2: checking BT enabled…');
+    const enabled = await RNBluetoothClassic.isBluetoothEnabled();
+    console.log('[BT] Step 2 done, enabled =', enabled);
+
+    if (!enabled) {
+      console.log('[BT] Step 3: requesting BT enable…');
+      await RNBluetoothClassic.requestBluetoothEnabled();
+      console.log('[BT] Step 3 done');
+    }
+
+    console.log('[BT] Step 4: getBondedDevices…');
+    const devices = await RNBluetoothClassic.getBondedDevices();
+    console.log('[BT] Step 4 done, count =', devices.length);
+    return devices;
+  } catch (e: any) {
+    console.error('[BT] getPairedDevices error:', e);
+    setState({ errorMessage: e?.message ?? 'Failed to get paired devices' });
+    return [];
+  }
+}
+
+/** Scans for nearby discoverable Bluetooth devices (not yet paired). */
+export async function discoverDevices(): Promise<BluetoothDevice[]> {
+  try {
+    await requestBluetoothPermissions();
+
     const enabled = await RNBluetoothClassic.isBluetoothEnabled();
     if (!enabled) {
       await RNBluetoothClassic.requestBluetoothEnabled();
     }
-    return await RNBluetoothClassic.getBondedDevices();
+    return await RNBluetoothClassic.startDiscovery();
   } catch (e: any) {
-    setState({ errorMessage: e?.message ?? 'Failed to get paired devices' });
+    setState({ errorMessage: e?.message ?? 'Device discovery failed' });
     return [];
+  }
+}
+
+/** Cancels an in-progress device discovery scan. */
+export async function cancelDiscovery(): Promise<void> {
+  try {
+    await RNBluetoothClassic.cancelDiscovery();
+  } catch (_) {
+    // ignore
   }
 }
 
@@ -156,6 +222,9 @@ export async function connectToDevice(address: string): Promise<boolean> {
   if (activeDevice) {
     await disconnectDevice();
   }
+
+  // Ensure permissions are granted before attempting connection
+  await requestBluetoothPermissions();
 
   setState({ status: 'connecting', errorMessage: null });
 
@@ -172,6 +241,14 @@ export async function connectToDevice(address: string): Promise<boolean> {
     readSubscription = device.onDataReceived((event: BluetoothDeviceReadEvent) => {
       handleIncomingData(event.data);
     });
+
+    // Sync current Unix time so drink events get correct timestamps
+    try {
+      const nowSec = Math.floor(Date.now() / 1000);
+      await device.write(`TIME,${nowSec}\n`);
+    } catch (e) {
+      console.warn('[BT] TIME sync failed:', e);
+    }
 
     return true;
   } catch (e: any) {
@@ -230,7 +307,7 @@ export function sendCalibrate(): Promise<CalibrationResult> {
     const timeout = setTimeout(() => {
       unsub();
       reject(new Error('Calibration timed out — no response from device'));
-    }, 10000);
+    }, 20000);
 
     // One-shot listener that resolves/rejects on CAL_OK / CAL_FAIL
     const unsub = subscribeToCalibration((result) => {
@@ -256,8 +333,10 @@ function handleIncomingData(raw: string) {
   // depending on device configuration. Attempt binary first, then ASCII.
 
   // Try ASCII line-based protocol
+  // react-native-bluetooth-classic strips the trailing \n before delivery,
+  // so split on both \r\n and bare \r/\n to handle all variants.
   asciiBuffer += raw;
-  const lines = asciiBuffer.split('\n');
+  const lines = asciiBuffer.split(/\r\n|\r|\n/);
   asciiBuffer = lines.pop() ?? '';
 
   for (const line of lines) {

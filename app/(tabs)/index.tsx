@@ -14,7 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import {
+  cancelDiscovery,
   connectToDevice,
+  discoverDevices,
   disconnectDevice,
   getPairedDevices,
   getState as getBtState,
@@ -45,8 +47,10 @@ export default function OverviewTab() {
   const [todayMl, setTodayMl] = useState(0);
   const [drinkEvents, setDrinkEvents] = useState<DrinkEvent[]>([]);
   const [pairedDevices, setPairedDevices] = useState<PairedDevice[]>([]);
+  const [discoveredDevices, setDiscoveredDevices] = useState<PairedDevice[]>([]);
   const [showDeviceModal, setShowDeviceModal] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
+  const [deviceTab, setDeviceTab] = useState<'paired' | 'scan'>('paired');
   const [calStatus, setCalStatus] = useState<CalibrationStatus>('idle');
   const [calRawMm, setCalRawMm] = useState<number | null>(null);
 
@@ -99,16 +103,40 @@ export default function OverviewTab() {
   // ─── Bluetooth ───────────────────────────────────────────────────────────────
 
   const handleOpenDeviceModal = async () => {
+    setDeviceTab('paired');
+    setDiscoveredDevices([]);
     setScanLoading(true);
     setShowDeviceModal(true);
     try {
-      const devices = await getPairedDevices();
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Timed out fetching paired devices')), 8000)
+      );
+      const devices = await Promise.race([getPairedDevices(), timeout]);
       setPairedDevices(devices);
     } catch (e: any) {
-      Alert.alert('Bluetooth Error', e?.message ?? 'Failed to scan for devices');
+      Alert.alert('Bluetooth Error', e?.message ?? 'Failed to get paired devices');
     } finally {
       setScanLoading(false);
     }
+  };
+
+  const handleScan = async () => {
+    setDeviceTab('scan');
+    setDiscoveredDevices([]);
+    setScanLoading(true);
+    try {
+      const devices = await discoverDevices();
+      setDiscoveredDevices(devices);
+    } catch (e: any) {
+      Alert.alert('Scan Error', e?.message ?? 'Failed to discover devices');
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  const handleCloseDeviceModal = () => {
+    cancelDiscovery();
+    setShowDeviceModal(false);
   };
 
   const handleConnect = async (device: PairedDevice) => {
@@ -384,23 +412,46 @@ export default function OverviewTab() {
         visible={showDeviceModal}
         animationType="slide"
         transparent
-        onRequestClose={() => setShowDeviceModal(false)}
+        onRequestClose={handleCloseDeviceModal}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { backgroundColor: card }]}>
-            <Text style={[styles.modalTitle, { color: text }]}>Paired Bluetooth Devices</Text>
+            <Text style={[styles.modalTitle, { color: text }]}>Select Device</Text>
             <Text style={[styles.modalSub, { color: sub }]}>
               Select your HC-05 smart bottle module
             </Text>
 
+            {/* Paired / Scan tabs */}
+            <View style={[styles.tabRow, { backgroundColor: isDark ? '#2C2C3E' : '#F0F0F0' }]}>
+              <TouchableOpacity
+                style={[styles.tabBtn, deviceTab === 'paired' && styles.tabBtnActive]}
+                onPress={() => setDeviceTab('paired')}
+              >
+                <Text style={[styles.tabBtnText, { color: deviceTab === 'paired' ? '#FFF' : sub }]}>
+                  Paired
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabBtn, deviceTab === 'scan' && styles.tabBtnActive]}
+                onPress={handleScan}
+                disabled={scanLoading && deviceTab === 'scan'}
+              >
+                <Text style={[styles.tabBtnText, { color: deviceTab === 'scan' ? '#FFF' : sub }]}>
+                  {scanLoading && deviceTab === 'scan' ? 'Scanning…' : 'Scan'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {scanLoading ? (
               <ActivityIndicator color="#007AFF" style={{ marginVertical: 20 }} />
-            ) : pairedDevices.length === 0 ? (
+            ) : (deviceTab === 'paired' ? pairedDevices : discoveredDevices).length === 0 ? (
               <Text style={[styles.noDevices, { color: sub }]}>
-                No paired devices found. Pair your HC-05 in Android Bluetooth settings first.
+                {deviceTab === 'paired'
+                  ? 'No paired devices found. Try the Scan tab or pair your HC-05 in Android Bluetooth settings.'
+                  : 'No devices found. Make sure the HC-05 is powered on and in pairing mode.'}
               </Text>
             ) : (
-              pairedDevices.map((d) => (
+              (deviceTab === 'paired' ? pairedDevices : discoveredDevices).map((d) => (
                 <TouchableOpacity
                   key={d.address}
                   style={[styles.deviceRow, { borderColor: isDark ? '#333' : '#EEE' }]}
@@ -420,7 +471,7 @@ export default function OverviewTab() {
 
             <TouchableOpacity
               style={styles.modalClose}
-              onPress={() => setShowDeviceModal(false)}
+              onPress={handleCloseDeviceModal}
             >
               <Text style={{ color: '#FF3B30', fontWeight: '600' }}>Cancel</Text>
             </TouchableOpacity>
@@ -616,4 +667,18 @@ const styles = StyleSheet.create({
   deviceName: { fontSize: 16, fontWeight: '600' },
   deviceAddr: { fontSize: 13, marginTop: 2 },
   modalClose: { marginTop: 24, alignItems: 'center', paddingVertical: 12 },
+  tabRow: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 16,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  tabBtnActive: { backgroundColor: '#007AFF' },
+  tabBtnText: { fontSize: 14, fontWeight: '600' },
 });
