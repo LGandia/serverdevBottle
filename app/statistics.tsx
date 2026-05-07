@@ -104,7 +104,6 @@ export default function StatisticsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>
-      {/* Range toggle */}
       <View style={[styles.rangeRow, { backgroundColor: card }]}>
         {(['today', 'week'] as RangeKey[]).map((r) => (
           <TouchableOpacity
@@ -122,7 +121,6 @@ export default function StatisticsScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {range === 'today' ? (
           <>
-            {/* Today summary cards */}
             <View style={styles.summaryRow}>
               <SummaryCard
                 card={card}
@@ -154,7 +152,6 @@ export default function StatisticsScreen() {
               />
             </View>
 
-            {/* Hourly line chart */}
             <View style={[styles.chartCard, { backgroundColor: card }]}>
               <Text style={[styles.chartTitle, { color: textColor }]}>Hourly Intake (ml)</Text>
               {todayEvents.length === 0 ? (
@@ -176,7 +173,6 @@ export default function StatisticsScreen() {
               )}
             </View>
 
-            {/* Goal progress bar */}
             <View style={[styles.chartCard, { backgroundColor: card }]}>
               <Text style={[styles.chartTitle, { color: textColor }]}>Goal Progress</Text>
               <View style={styles.progressBarBg}>
@@ -201,7 +197,6 @@ export default function StatisticsScreen() {
               </View>
             </View>
 
-            {/* Drink log */}
             <View style={[styles.chartCard, { backgroundColor: card }]}>
               <Text style={[styles.chartTitle, { color: textColor }]}>Drink Log</Text>
               {todayEvents.length === 0 ? (
@@ -236,7 +231,6 @@ export default function StatisticsScreen() {
           </>
         ) : (
           <>
-            {/* Weekly bar chart */}
             <View style={[styles.chartCard, { backgroundColor: card }]}>
               <Text style={[styles.chartTitle, { color: textColor }]}>
                 Daily Intake — Last 7 Days (ml)
@@ -262,7 +256,6 @@ export default function StatisticsScreen() {
               )}
             </View>
 
-            {/* Weekly summary rows */}
             <View style={[styles.chartCard, { backgroundColor: card }]}>
               <Text style={[styles.chartTitle, { color: textColor }]}>Weekly Summary</Text>
               {last7.map((d, i) => {
@@ -298,7 +291,6 @@ export default function StatisticsScreen() {
               })}
             </View>
 
-            {/* 7-day aggregate stats */}
             <View style={styles.summaryRow}>
               <SummaryCard
                 card={card}

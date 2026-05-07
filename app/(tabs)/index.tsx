@@ -20,8 +20,10 @@ import {
   disconnectDevice,
   getPairedDevices,
   getState as getBtState,
+  resetBottleNotConfiguredDebounce,
   sendCalibrate,
   subscribe as btSubscribe,
+  subscribeToBottleNotConfigured,
   subscribeToPackets,
 } from '../../services/bluetooth';
 import type { BluetoothState } from '../../services/bluetooth';
@@ -29,6 +31,7 @@ import {
   getDailyTotalMl,
   getDrinkEventsByDate,
   getUserProfile,
+  saveCalFullMm,
   todayDateStr,
 } from '../../services/database';
 import type { DrinkEvent, UserProfileLocal } from '../../services/database';
@@ -68,6 +71,30 @@ export default function OverviewTab() {
 
   useEffect(() => {
     const unsub = subscribeToPackets(() => refreshData());
+    return unsub;
+  }, []);
+
+  // MODIFIED: Show alert when a DRINK packet arrives but ml_per_mm = 0.
+  // The debounce in bluetooth.ts guarantees this fires at most once per 30 s,
+  // so the alert cannot stack up. "Set Up Now" resets the debounce so the
+  // next packet after a successful save is evaluated immediately.
+  useEffect(() => {
+    const unsub = subscribeToBottleNotConfigured(() => {
+      Alert.alert(
+        'Bottle Not Configured',
+        'A drink was detected but your bottle hasn\'t been set up yet.\n\nDrinks cannot be logged until you configure your bottle.',
+        [
+          { text: 'Later', style: 'cancel' },
+          {
+            text: 'Set Up Now',
+            onPress: () => {
+              resetBottleNotConfiguredDebounce(); // re-arm so next packet isn't silenced
+              router.push('/bottle-setup');
+            },
+          },
+        ]
+      );
+    });
     return unsub;
   }, []);
 
@@ -176,6 +203,10 @@ export default function OverviewTab() {
               if (result.success) {
                 setCalStatus('ok');
                 setCalRawMm(result.raw_mm);
+                // Persist sensor reading so Bottle Setup can derive height
+                if (result.raw_mm != null) {
+                  await saveCalFullMm(result.raw_mm);
+                }
                 // Auto-reset indicator after 6 seconds
                 setTimeout(() => setCalStatus('idle'), 6000);
               } else {
@@ -373,6 +404,49 @@ export default function OverviewTab() {
             </Text>
           )}
         </View>
+
+        {/* Bottle Setup card — MODIFIED: shows warning banner when unconfigured */}
+        <TouchableOpacity
+          style={[
+            styles.calCard,
+            { backgroundColor: card },
+            // Highlight the card border when connected but not configured
+            btState.bottleConfigured === false && btState.status === 'connected'
+              ? { borderWidth: 1.5, borderColor: '#FF9500' }
+              : undefined,
+          ]}
+          onPress={() => router.push('/bottle-setup')}
+          activeOpacity={0.75}
+        >
+          <View style={styles.calRow}>
+            <View style={styles.calInfo}>
+              <Ionicons
+                name="flask-outline"
+                size={22}
+                // NEW: orange when unconfigured, blue otherwise
+                color={btState.bottleConfigured === false ? '#FF9500' : '#007AFF'}
+              />
+              <View style={{ marginLeft: 12, flex: 1 }}>
+                <Text style={[styles.calTitle, { color: text }]}>Bottle Setup</Text>
+                <Text style={[styles.calSubtitle, { color: sub }]}>
+                  Configure your bottle's dimensions or capacity so the app can
+                  convert sensor readings into millilitres.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={sub} />
+            </View>
+          </View>
+
+          {/* NEW: persistent warning strip — only when connected + unconfigured */}
+          {btState.bottleConfigured === false && btState.status === 'connected' && (
+            <View style={styles.notConfiguredBanner}>
+              <Ionicons name="warning-outline" size={15} color="#FF9500" />
+              <Text style={styles.notConfiguredText}>
+                Bottle not configured — drinks cannot be logged
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
         {/* Drink history */}
         <View style={[styles.historyCard, { backgroundColor: card }]}>
@@ -614,6 +688,23 @@ const styles = StyleSheet.create({
   },
   calButtonText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
   calHint: { fontSize: 11, textAlign: 'center', marginTop: 8 },
+  // NEW: warning strip inside the Bottle Setup card
+  notConfiguredBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,149,0,0.12)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginTop: 10,
+    gap: 6,
+  },
+  notConfiguredText: {
+    fontSize: 12,
+    color: '#FF9500',
+    fontWeight: '600',
+    flex: 1,
+  },
   // Drink history
   historyCard: {
     borderRadius: 16,
