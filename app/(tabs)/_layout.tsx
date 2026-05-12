@@ -20,8 +20,8 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: tabBarBg,
           borderTopColor: isDark ? '#2C2C3E' : '#E5E5E5',
-          paddingBottom: 6,
-          height: 60,
+          paddingBottom: insets.bottom + 6,
+          height: 60 + insets.bottom,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}

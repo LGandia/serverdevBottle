@@ -75,6 +75,7 @@ export default function OverviewTab() {
   }, []);
 
   // Show alert when a DRINK packet arrives but ml_per_mm = 0.
+
   // The debounce in bluetooth.ts guarantees this fires at most once per 30 s,
   // so the alert cannot stack up. "Set Up Now" resets the debounce so the
   // next packet after a successful save is evaluated immediately.

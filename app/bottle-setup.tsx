@@ -55,6 +55,7 @@ export default function BottleSetupScreen() {
   const sep  = isDark ? '#2C2C3E' : '#F0F0F0';
 
   // Form state
+
   const [mode, setMode]           = useState<BottleInputMode>('dimensions');
   const [capacityMl, setCapacityMl]       = useState('');
   const [heightCm, setHeightCm]           = useState('');
@@ -84,6 +85,7 @@ export default function BottleSetupScreen() {
   );
 
   // Derived / preview values for user feedback as they fill the form
+
   const previewConfig = {
     mode,
     capacity_ml:   parseFloat(capacityMl)  || 0,
