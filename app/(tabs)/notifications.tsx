@@ -97,7 +97,7 @@ export default function NotificationsTab() {
     }, [loadSettings])
   );
 
-  // ─── Recurring reminder ──────────────────────────────────────────────────────
+  // Recurring reminder 
 
   const handleRecurringToggle = async (val: boolean) => {
     setRecurringEnabled(val);
@@ -131,7 +131,7 @@ export default function NotificationsTab() {
     }
   };
 
-  // ─── Smart reminder ──────────────────────────────────────────────────────────
+  // Smart reminder 
 
   const handleSmartCheck = async () => {
     const mins = parseInt(smartMinutes, 10);
@@ -147,7 +147,7 @@ export default function NotificationsTab() {
     }
   };
 
-  // ─── Add time-based reminder ─────────────────────────────────────────────────
+  // Add time-based reminder 
 
   const handleAddReminder = async () => {
     const hour = newTime.getHours();

@@ -47,7 +47,7 @@ export default function ProfileTab() {
     dob.getMonth() + 1
   ).padStart(2, '0')}/${dob.getFullYear()}`;
 
-  // ─── Load saved profile ──────────────────────────────────────────────────────
+  // Load saved profile 
 
   useFocusEffect(
     useCallback(() => {

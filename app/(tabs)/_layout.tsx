@@ -2,9 +2,11 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabsLayout() {
   const isDark = useColorScheme() === 'dark';
+  const insets = useSafeAreaInsets();
   const activeTint = '#007AFF';
   const inactiveTint = isDark ? '#9BA1A6' : '#687076';
   const tabBarBg = isDark ? '#1E1E2E' : '#FFFFFF';
